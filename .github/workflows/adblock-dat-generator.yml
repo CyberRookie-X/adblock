@@ -1,0 +1,215 @@
+name: Adblock DAT File Generator
+
+on:
+  schedule:
+    # 每天1点，9点，17点执行
+    - cron: '0 1,9,17 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python -m pip install protobuf
+
+      - name: Download CN list
+        run: |
+          curl -L "https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblockdomainlite.txt" -o cn.txt
+          
+      - name: Download Global list
+        run: |
+          curl -L "https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblockdomain.txt" -o global.txt
+
+      - name: Remove lines starting with !
+        run: |
+          grep -v '^!' cn.txt > cn_filtered.txt && mv cn_filtered.txt cn.txt
+          grep -v '^!' global.txt > global_filtered.txt && mv global_filtered.txt global.txt
+
+      - name: Remove duplicates from global list
+        run: |
+          # 获取cn.txt中的域名列表
+          comm -12 <(sort cn.txt) <(sort global.txt) > duplicates.txt
+          # 从global.txt中移除重复项
+          grep -vxFf duplicates.txt global.txt > global_unique.txt && mv global_unique.txt global.txt
+
+      - name: Create adblock.dat file
+        run: |
+          # 创建一个临时Python脚本来生成adblock.dat文件
+          cat > generate_dat.py << 'EOF'
+          import struct
+          import os
+          
+          def write_varint(buf, value):
+              """Write a varint to the buffer"""
+              while value > 0x7f:
+                  buf.append((value & 0x7f) | 0x80)
+                  value >>= 7
+              buf.append(value)
+          
+          def write_string(buf, s):
+              """Write a length-prefixed string to the buffer"""
+              b = s.encode('utf-8')
+              write_varint(buf, len(b))
+              buf.extend(b)
+          
+          def write_domain(buf, domain_type, value):
+              """Write a Domain message to the buffer following protobuf format"""
+              # Create a buffer for the Domain message
+              domain_buf = bytearray()
+              
+              # Field 1: type (varint)
+              write_varint(domain_buf, (1 << 3) | 0)  # field number 1, wire type 0 (varint)
+              write_varint(domain_buf, domain_type)
+              
+              # Field 2: value (string)
+              write_varint(domain_buf, (2 << 3) | 2)  # field number 2, wire type 2 (length-delimited)
+              write_string(domain_buf, value)
+              
+              # Field 3: attribute (repeated, length-delimited)
+              write_varint(domain_buf, (3 << 3) | 2)  # field number 3, wire type 2 (length-delimited)
+              write_varint(domain_buf, 0)  # Empty list
+              
+              # Write the complete Domain message to the main buffer
+              write_varint(buf, len(domain_buf))
+              buf.extend(domain_buf)
+          
+          def write_geosite_entry(buf, country_code, domains):
+              """Write a GeoSite entry to the buffer"""
+              # Create a buffer for the GeoSite entry
+              entry_buf = bytearray()
+              
+              # Field 1: country_code (string)
+              write_varint(entry_buf, (1 << 3) | 2)  # field number 1, wire type 2 (length-delimited)
+              write_string(entry_buf, country_code)
+              
+              # Field 2: domains (repeated Domain messages)
+              for domain in domains:
+                  write_varint(entry_buf, (2 << 3) | 2)  # field number 2, wire type 2 (length-delimited)
+                  write_domain(entry_buf, 2, domain)  # Using Domain type for all domains
+              
+              # Write the complete entry to the main buffer
+              write_varint(buf, len(entry_buf))
+              buf.extend(entry_buf)
+          
+          # 读取cn.txt文件
+          with open('cn.txt', 'r') as f:
+              cn_domains = [line.strip() for line in f if line.strip()]
+          
+          # 读取global.txt文件
+          with open('global.txt', 'r') as f:
+              global_domains = [line.strip() for line in f if line.strip()]
+          
+          # 删除已存在的adblock.dat文件
+          if os.path.exists('adblock.dat'):
+              os.remove('adblock.dat')
+          
+          # 创建adblock.dat文件，严格按照GeoSiteList protobuf结构
+          with open('adblock.dat', 'wb') as f:
+              # Create main buffer
+              main_buf = bytearray()
+              
+              # Write GeoSiteList with 2 entries
+              # Field 1 (repeated GeoSite) for 'CN' entry
+              write_varint(main_buf, (1 << 3) | 2)  # field number 1, wire type 2 (length-delimited)
+              write_geosite_entry(main_buf, 'CN', cn_domains)
+              
+              # Field 1 (repeated GeoSite) for 'NOTCN' entry
+              write_varint(main_buf, (1 << 3) | 2)  # field number 1, wire type 2 (length-delimited)
+              write_geosite_entry(main_buf, 'NOTCN', global_domains)
+              
+              # Write to file
+              f.write(main_buf)
+          
+          print(f"Generated adblock.dat with {len(cn_domains)} CN domains and {len(global_domains)} NOTCN domains")
+          EOF
+          
+          python generate_dat.py
+
+      - name: Upload and commit geosite.dat
+        run: |
+          # 创建rules目录（如果不存在）
+          mkdir -p rules
+          
+          # 移动新生成的文件到rules目录
+          mv adblock.dat rules/adblock.dat
+          
+          # 使用GitHub Actions的内置token进行身份验证
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 强制添加文件
+          git add --force rules/adblock.dat
+          
+          # 提交更改
+          git commit -m "Update adblock.dat $(date +%s)" || echo "No changes to commit"
+          
+          # 推送到远程仓库
+          git push
+          
+          echo "Workflow completed"
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +%Y%m%d-%H%M)" >> $GITHUB_ENV
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.date }}
+          release_name: adblock.dat ${{ env.date }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./rules/adblock.dat
+          asset_name: adblock.dat
+          asset_content_type: application/octet-stream
+
+      - name: Tag latest release
+        run: |
+          gh release edit ${{ env.date }} --notes "Latest geosite.dat release" -R ${{ github.repository }}
+          gh release edit ${{ env.date }} --latest -R ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old releases
+        run: |
+          # 获取7天前的时间戳
+          cutoff_date=$(date -d '7 days ago' +%s)
+          
+          # 获取所有发布版本
+          releases=$(gh release list -R ${{ github.repository }} --limit 100 | awk '{print $1}')
+          
+          # 遍历并删除7天前的版本
+          for release in $releases; do
+            # 获取发布日期
+            release_date=$(gh release view $release -R ${{ github.repository }} --json createdAt -q .createdAt | cut -d'T' -f1)
+            release_timestamp=$(date -d "$release_date" +%s)
+            
+            # 如果发布日期早于7天前且不是latest标签，则删除
+            if [[ $release_timestamp -lt $cutoff_date && "$release" != "latest" ]]; then
+              echo "Deleting release: $release"
+              gh release delete $release -R ${{ github.repository }} --yes || true
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
