@@ -165,31 +165,21 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ env.date }}
-          release_name: adblock.dat ${{ env.date }}
+          tag: ${{ env.date }}
+          name: adblock.dat ${{ env.date }}
           draft: false
           prerelease: false
+          makeLatest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./rules/adblock.dat
-          asset_name: adblock.dat
-          asset_content_type: application/octet-stream
-
-      - name: Tag latest release
-        run: |
-          gh release edit ${{ env.date }} --notes "Latest adblock.dat release" -R ${{ github.repository }}
-          gh release edit ${{ env.date }} --latest -R ${{ github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ env.date }}
+          artifacts: ./rules/adblock.dat
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete old releases
         run: |
