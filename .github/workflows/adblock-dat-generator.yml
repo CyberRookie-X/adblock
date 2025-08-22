@@ -136,7 +136,7 @@ jobs:
           
           python generate_dat.py
 
-      - name: Upload and commit geosite.dat
+      - name: Upload and commit adblock.dat
         run: |
           # 创建rules目录（如果不存在）
           mkdir -p rules
@@ -186,7 +186,7 @@ jobs:
 
       - name: Tag latest release
         run: |
-          gh release edit ${{ env.date }} --notes "Latest geosite.dat release" -R ${{ github.repository }}
+          gh release edit ${{ env.date }} --notes "Latest adblock.dat release" -R ${{ github.repository }}
           gh release edit ${{ env.date }} --latest -R ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
