@@ -136,35 +136,11 @@ jobs:
           
           python generate_dat.py
 
-      - name: Upload and commit adblock.dat
-        run: |
-          # 创建rules目录（如果不存在）
-          mkdir -p rules
-          
-          # 移动新生成的文件到rules目录
-          mv adblock.dat rules/adblock.dat
-          
-          # 使用GitHub Actions的内置token进行身份验证
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          # 强制添加文件
-          git add --force rules/adblock.dat
-          
-          # 提交更改
-          git commit -m "Update adblock.dat $(date +%s)" || echo "No changes to commit"
-          
-          # 推送到远程仓库
-          git push
-          
-          echo "Workflow completed"
-
       - name: Get current date
         id: date
         run: echo "date=$(date +%Y%m%d-%H%M)" >> $GITHUB_ENV
 
-      - name: Create Release
-        id: create_release
+      - name: Create Release and Upload Asset
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.date }}
@@ -172,13 +148,7 @@ jobs:
           draft: false
           prerelease: false
           makeLatest: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ env.date }}
-          artifacts: ./rules/adblock.dat
+          artifacts: ./adblock.dat
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete old releases
