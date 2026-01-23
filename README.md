@@ -7,7 +7,7 @@
 CN，中国域名，约占2%  
 NOTCN，非中国域名，约占98%  
 
-[原始链接](https://github.com/Cloud370/adblock/releases/latest/download/adblock.dat)
+[原始链接](https://github.com/CyberRookie-X/adblock/releases/latest/download/adblock.dat) | [加速链接1](https://ghfast.top/https://github.com/CyberRookie-X/adblock/releases/latest/download/adblock.dat) |	<!--[加速链接1](https://gcore.jsdelivr.net/gh/CyberRookie-X/adblock/releases/latest/download/adblock.dat) --> 	[加速链接2](https://github.boki.moe/https://github.com/CyberRookie-X/adblock/releases/latest/download/adblock.dat) 		
 
 上游  [217heidai/adblockfilters](https://github.com/217heidai/adblockfilters)  
 本仓库只是对上游 list 进行格式转换，如有域名误封问题请到 上游 或 上游的上游 反馈。
