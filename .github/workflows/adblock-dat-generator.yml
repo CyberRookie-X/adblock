@@ -15,6 +15,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Update README with current repo info
+        run: |
+          # Construct the new URL for the current repository
+          NEW_URL="https://github.com/${{ github.repository }}/releases/latest/download/adblock.dat"
+          # Replace the existing download link (matching the specific pattern)
+          # This ensures that forks will automatically point to their own releases
+          sed -i "s|https://github.com/[^/]*/[^/]*/releases/latest/download/adblock.dat|$NEW_URL|g" README.md
+          
+          # Configure git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Commit and push if changed
+          if [[ -n $(git status -s README.md) ]]; then
+            git add README.md
+            git commit -m "docs: auto-update download link to ${{ github.repository }}"
+            git push
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
