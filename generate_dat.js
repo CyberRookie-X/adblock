@@ -55,7 +55,10 @@ function writeGeositeEntry(buf, countryCode, domains) {
     
     // Write the complete entry to the main buffer
     writeVarint(buf, entryBuf.length);
-    buf.push(...entryBuf);
+    const CHUNK_SIZE = 10000;
+    for (let i = 0; i < entryBuf.length; i += CHUNK_SIZE) {
+        buf.push(...entryBuf.slice(i, i + CHUNK_SIZE));
+    }
 }
 
 function main() {
